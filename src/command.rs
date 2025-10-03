@@ -3,7 +3,6 @@ use std::{process::Command, str::Utf8Error};
 use crate::{
     ShellPrintable,
     escape::{SimpleEscapeOptions, simple_escape},
-    shell_printable::ShellPrintableRef,
 };
 
 impl ShellPrintable for Command {
@@ -41,13 +40,11 @@ impl ShellPrintable for Command {
     }
 }
 
-impl ShellPrintableRef for Command {}
-
 #[cfg(test)]
 mod tests {
     use std::process::Command;
 
-    use crate::shell_printable::ShellPrintableRef;
+    use crate::ShellPrintable;
 
     #[test]
     fn my_test() -> Result<(), String> {

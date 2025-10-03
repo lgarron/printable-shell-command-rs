@@ -11,4 +11,5 @@ keywords = ["shell"]
 
 
 [dependencies]
+itertools = "0.14.0"
 regex = "1.11.3"
