@@ -1,0 +1,14 @@
+[package]
+name = "printable-shell-command"
+version = "0.1.0"
+edition = "2024"
+description = "A helper library help print shell commands."
+license = "MIT"
+homepage = "https://github.com/lgarron/printable-shell-command-rs"
+documentation = "https://github.com/lgarron/printable-shell-command-rs"
+repository = "https://github.com/lgarron/printable-shell-command-rs"
+keywords = ["shell"]
+
+
+[dependencies]
+regex = "1.11.3"
