@@ -7,5 +7,5 @@ fn main() {
         .unwrap()
         .status()
         .unwrap()
-        .success(),);
+        .success());
 }
