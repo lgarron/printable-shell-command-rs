@@ -47,8 +47,17 @@ mod tests {
     use crate::ShellPrintable;
 
     #[test]
-    fn my_test() -> Result<(), String> {
-        let _ = Command::new("echo").args(["#hi"]).print_invocation();
+    fn echo() -> Result<(), String> {
+        let mut command = Command::new("echo");
+        command.args(["#hi"]);
+        // Not printed by tests, but we can at least check this doesn't panic.
+        let _ = command.print_invocation();
+
+        assert_eq!(
+            command.printable_invocation_string().unwrap(),
+            "echo \\
+  '#hi'"
+        );
         Ok(())
     }
 }
