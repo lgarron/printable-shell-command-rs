@@ -6,6 +6,7 @@ build:
 test:
 	cargo test
 	cargo run --example echo
+	cargo run --example ffmpeg
 
 .PHONY: publish
 publish:
