@@ -8,10 +8,10 @@ use std::{
 use itertools::Itertools;
 
 use crate::{
-    FormattingOptions,
     command::{add_arg_from_command, add_arg_from_command_lossy},
     print_builder::PrintBuilder,
     shell_printable::{ShellPrintable, ShellPrintableWithOptions},
+    FormattingOptions,
 };
 
 pub struct PrintableShellCommand {

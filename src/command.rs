@@ -1,8 +1,8 @@
 use std::{ffi::OsStr, process::Command, str::Utf8Error};
 
 use crate::{
-    FormattingOptions, ShellPrintable, print_builder::PrintBuilder,
-    shell_printable::ShellPrintableWithOptions,
+    print_builder::PrintBuilder, shell_printable::ShellPrintableWithOptions, FormattingOptions,
+    ShellPrintable,
 };
 
 pub(crate) fn add_arg_from_command_lossy(print_builder: &mut PrintBuilder, arg: &OsStr) {

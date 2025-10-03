@@ -1,8 +1,8 @@
 use itertools::Itertools;
 
 use crate::{
+    format::{conditional_escape, unconditional_escape, ConditionalEscapeOptions},
     ArgumentLineWrapping, FormattingOptions,
-    format::{ConditionalEscapeOptions, conditional_escape, unconditional_escape},
 };
 
 const DEFAULT_MAIN_INDENTATION: &str = "";
