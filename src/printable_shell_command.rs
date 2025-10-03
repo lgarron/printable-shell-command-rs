@@ -8,8 +8,10 @@ use std::{
 use itertools::Itertools;
 
 use crate::{
-    escape::{SimpleEscapeOptions, simple_escape},
-    shell_printable::ShellPrintable,
+    FormattingOptions,
+    command::{add_arg_from_command, add_arg_from_command_lossy},
+    print_builder::PrintBuilder,
+    shell_printable::{ShellPrintable, ShellPrintableWithOptions},
 };
 
 pub struct PrintableShellCommand {
@@ -87,8 +89,6 @@ impl PrintableShellCommand {
                 }
             }
         }
-        dbg!(&to_adopt);
-
         to_adopt
     }
 
@@ -101,6 +101,19 @@ impl PrintableShellCommand {
             self.arg_without_adoption(arg);
         }
         self
+    }
+
+    fn add_unadopted_args_lossy(&self, print_builder: &mut PrintBuilder) {
+        for arg in self.args_to_adopt() {
+            add_arg_from_command_lossy(print_builder, arg.as_os_str());
+        }
+    }
+
+    fn add_unadopted_args(&self, print_builder: &mut PrintBuilder) -> Result<(), Utf8Error> {
+        for arg in self.args_to_adopt() {
+            add_arg_from_command(print_builder, arg.as_os_str())?;
+        }
+        Ok(())
     }
 }
 
@@ -131,97 +144,83 @@ impl From<Command> for PrintableShellCommand {
     }
 }
 
-impl ShellPrintable for PrintableShellCommand {
-    fn printable_invocation_string_lossy(&self) -> String {
-        let mut lines: Vec<String> = vec![simple_escape(
-            &self.command.get_program().to_string_lossy(),
-            SimpleEscapeOptions { is_command: true },
-        )];
-
-        // TODO: make this more efficient. (Take `&mut self` in the trait? Interior mutability?)
-        let a = self.arg_groups.iter();
-        let b: Vec<Vec<OsString>> = self
-            .args_to_adopt()
-            .into_iter()
-            .map(|arg| vec![arg])
-            .collect();
-
-        for arg_group in a.chain(&b) {
-            let mut line_parts = vec![];
+impl ShellPrintableWithOptions for PrintableShellCommand {
+    fn printable_invocation_string_lossy_with_options(
+        &self,
+        formatting_options: FormattingOptions,
+    ) -> String {
+        let mut print_builder = PrintBuilder::new(formatting_options);
+        print_builder.add_program_name(&self.get_program().to_string_lossy());
+        for arg_group in &self.arg_groups {
+            let mut strings: Vec<String> = vec![];
             for arg in arg_group {
-                line_parts.push(simple_escape(
-                    &arg.to_string_lossy(),
-                    SimpleEscapeOptions { is_command: false },
-                ))
+                strings.push(arg.to_string_lossy().to_string())
             }
-            lines.push(line_parts.join(" "))
+            print_builder.add_arg_group(strings.iter());
         }
-        lines.join(
-            " \\
-  ",
-        )
+        self.add_unadopted_args_lossy(&mut print_builder);
+        print_builder.get()
     }
 
-    fn printable_invocation_string(&self) -> Result<String, Utf8Error> {
-        let mut lines: Vec<String> = vec![simple_escape(
-            TryInto::<&str>::try_into(self.command.get_program())?,
-            SimpleEscapeOptions { is_command: true },
-        )];
-
-        // TODO: make this more efficient. (Take `&mut self` in the trait? Interior mutability?)
-        let a = self.arg_groups.iter();
-        let b: Vec<Vec<OsString>> = self
-            .args_to_adopt()
-            .into_iter()
-            .map(|arg| vec![arg])
-            .collect();
-
-        for arg_group in a.chain(&b) {
-            let mut line_parts = vec![];
+    fn printable_invocation_string_with_options(
+        &self,
+        formatting_options: FormattingOptions,
+    ) -> Result<String, Utf8Error> {
+        let mut print_builder = PrintBuilder::new(formatting_options);
+        print_builder.add_program_name(TryInto::<&str>::try_into(self.get_program())?);
+        for arg_group in &self.arg_groups {
+            let mut strings: Vec<&str> = vec![];
             for arg in arg_group {
                 let s = TryInto::<&str>::try_into(arg.as_os_str())?;
-                line_parts.push(simple_escape(s, SimpleEscapeOptions { is_command: false }))
+                strings.push(s)
             }
-            lines.push(line_parts.join(" "))
+            print_builder.add_arg_group(strings.into_iter());
         }
-        Ok(lines.join(
-            " \\
-  ",
-        ))
+        self.add_unadopted_args(&mut print_builder)?;
+        Ok(print_builder.get())
+    }
+}
+
+impl ShellPrintable for PrintableShellCommand {
+    fn printable_invocation_string(&self) -> Result<String, Utf8Error> {
+        self.printable_invocation_string_with_options(Default::default())
+    }
+
+    fn printable_invocation_string_lossy(&self) -> String {
+        self.printable_invocation_string_lossy_with_options(Default::default())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{ops::DerefMut, process::Command};
+    use std::{ops::DerefMut, process::Command, str::Utf8Error};
 
-    use crate::{PrintableShellCommand, ShellPrintable};
+    use crate::{
+        FormattingOptions, PrintableShellCommand, Quoting, ShellPrintable,
+        ShellPrintableWithOptions,
+    };
 
     #[test]
-    fn echo() -> Result<(), String> {
+    fn echo() -> Result<(), Utf8Error> {
         let mut printable_shell_command = PrintableShellCommand::new("echo");
         printable_shell_command.args(["#hi"]);
         // Not printed by successful tests, but we can at least check this doesn't panic.
         let _ = printable_shell_command.print_invocation();
 
         assert_eq!(
-            printable_shell_command
-                .printable_invocation_string()
-                .unwrap(),
+            printable_shell_command.printable_invocation_string()?,
             "echo \\
   '#hi'"
         );
         assert_eq!(
-            printable_shell_command
-                .printable_invocation_string()
-                .unwrap(),
+            printable_shell_command.printable_invocation_string()?,
             printable_shell_command.printable_invocation_string_lossy(),
         );
         Ok(())
     }
 
     #[test]
-    fn ffmpeg() -> Result<(), String> {
+    fn ffmpeg() -> Result<(), Utf8Error> {
         let mut printable_shell_command = PrintableShellCommand::new("ffmpeg");
         printable_shell_command
             .args(["-i", "./test/My video.mp4"])
@@ -232,9 +231,7 @@ mod tests {
         let _ = printable_shell_command.print_invocation();
 
         assert_eq!(
-            printable_shell_command
-                .printable_invocation_string()
-                .unwrap(),
+            printable_shell_command.printable_invocation_string()?,
             "ffmpeg \\
   -i './test/My video.mp4' \\
   -filter:v 'setpts=2.0*PTS' \\
@@ -242,16 +239,14 @@ mod tests {
   './test/My video (slow-mo).mov'"
         );
         assert_eq!(
-            printable_shell_command
-                .printable_invocation_string()
-                .unwrap(),
+            printable_shell_command.printable_invocation_string()?,
             printable_shell_command.printable_invocation_string_lossy(),
         );
         Ok(())
     }
 
     #[test]
-    fn from_command() -> Result<(), String> {
+    fn from_command() -> Result<(), Utf8Error> {
         let mut command = Command::new("echo");
         command.args(["hello", "#world"]);
         // Not printed by tests, but we can at least check this doesn't panic.
@@ -259,9 +254,7 @@ mod tests {
         let _ = printable_shell_command.print_invocation();
 
         assert_eq!(
-            printable_shell_command
-                .printable_invocation_string()
-                .unwrap(),
+            printable_shell_command.printable_invocation_string()?,
             "echo \\
   hello \\
   '#world'"
@@ -270,7 +263,7 @@ mod tests {
     }
 
     #[test]
-    fn adoption() -> Result<(), String> {
+    fn adoption() -> Result<(), Utf8Error> {
         let mut printable_shell_command = PrintableShellCommand::new("echo");
 
         {
@@ -279,13 +272,9 @@ mod tests {
             command.arg("#world");
         }
 
-        printable_shell_command
-            .printable_invocation_string()
-            .unwrap();
+        printable_shell_command.printable_invocation_string()?;
         assert_eq!(
-            printable_shell_command
-                .printable_invocation_string()
-                .unwrap(),
+            printable_shell_command.printable_invocation_string()?,
             "echo \\
   hello \\
   '#world'"
@@ -293,13 +282,9 @@ mod tests {
 
         printable_shell_command.args(["wide", "web"]);
 
-        printable_shell_command
-            .printable_invocation_string()
-            .unwrap();
+        printable_shell_command.printable_invocation_string()?;
         assert_eq!(
-            printable_shell_command
-                .printable_invocation_string()
-                .unwrap(),
+            printable_shell_command.printable_invocation_string()?,
             "echo \\
   hello \\
   '#world' \\
@@ -332,4 +317,176 @@ mod tests {
     }
 
     // TODO: test invalid UTF-8
+
+    fn rsync_command_for_testing() -> PrintableShellCommand {
+        let mut printable_shell_command = PrintableShellCommand::new("rsync");
+        printable_shell_command
+            .arg("-avz")
+            .args(["--exclude", ".DS_Store"])
+            .args(["--exclude", ".git"])
+            .arg("./dist/web/experiments.cubing.net/test/deploy/")
+            .arg("experiments.cubing.net:~/experiments.cubing.net/test/deploy/");
+        printable_shell_command
+    }
+
+    #[test]
+    fn extra_safe_quoting() -> Result<(), Utf8Error> {
+        let printable_shell_command = rsync_command_for_testing();
+        assert_eq!(
+            printable_shell_command.printable_invocation_string_with_options(
+                FormattingOptions {
+                    quoting: Some(Quoting::ExtraSafe),
+                    ..Default::default()
+                }
+            )?,
+            "'rsync' \\
+  '-avz' \\
+  '--exclude' '.DS_Store' \\
+  '--exclude' '.git' \\
+  './dist/web/experiments.cubing.net/test/deploy/' \\
+  'experiments.cubing.net:~/experiments.cubing.net/test/deploy/'"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn indentation() -> Result<(), Utf8Error> {
+        let printable_shell_command = rsync_command_for_testing();
+        assert_eq!(
+            printable_shell_command.printable_invocation_string_with_options(
+                FormattingOptions {
+                    arg_indentation: Some("\t   \t".to_owned()),
+                    ..Default::default()
+                }
+            )?,
+            "rsync \\
+	   	-avz \\
+	   	--exclude .DS_Store \\
+	   	--exclude .git \\
+	   	./dist/web/experiments.cubing.net/test/deploy/ \\
+	   	experiments.cubing.net:~/experiments.cubing.net/test/deploy/"
+        );
+        assert_eq!(
+            printable_shell_command.printable_invocation_string_with_options(
+                FormattingOptions {
+                    arg_indentation: Some("↪ ".to_owned()),
+                    ..Default::default()
+                }
+            )?,
+            "rsync \\
+↪ -avz \\
+↪ --exclude .DS_Store \\
+↪ --exclude .git \\
+↪ ./dist/web/experiments.cubing.net/test/deploy/ \\
+↪ experiments.cubing.net:~/experiments.cubing.net/test/deploy/"
+        );
+        assert_eq!(
+            printable_shell_command.printable_invocation_string_with_options(
+                FormattingOptions {
+                    main_indentation: Some("  ".to_owned()),
+                    ..Default::default()
+                }
+            )?,
+            "  rsync \\
+    -avz \\
+    --exclude .DS_Store \\
+    --exclude .git \\
+    ./dist/web/experiments.cubing.net/test/deploy/ \\
+    experiments.cubing.net:~/experiments.cubing.net/test/deploy/"
+        );
+        assert_eq!(
+            printable_shell_command.printable_invocation_string_with_options(
+                FormattingOptions {
+                    main_indentation: Some("🙈".to_owned()),
+                    arg_indentation: Some("🙉".to_owned()),
+                    ..Default::default()
+                }
+            )?,
+            "🙈rsync \\
+🙈🙉-avz \\
+🙈🙉--exclude .DS_Store \\
+🙈🙉--exclude .git \\
+🙈🙉./dist/web/experiments.cubing.net/test/deploy/ \\
+🙈🙉experiments.cubing.net:~/experiments.cubing.net/test/deploy/"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn line_wrapping() -> Result<(), Utf8Error> {
+        let printable_shell_command = rsync_command_for_testing();
+        assert_eq!(
+            printable_shell_command.printable_invocation_string_with_options(
+                FormattingOptions {
+                    argument_line_wrapping: Some(crate::ArgumentLineWrapping::ByEntry),
+                    ..Default::default()
+                }
+            )?,
+            printable_shell_command.printable_invocation_string()?
+        );
+        assert_eq!(
+            printable_shell_command.printable_invocation_string_with_options(
+                FormattingOptions {
+                    argument_line_wrapping: Some(crate::ArgumentLineWrapping::NestedByEntry),
+                    ..Default::default()
+                }
+            )?,
+            "rsync \\
+  -avz \\
+  --exclude \\
+    .DS_Store \\
+  --exclude \\
+    .git \\
+  ./dist/web/experiments.cubing.net/test/deploy/ \\
+  experiments.cubing.net:~/experiments.cubing.net/test/deploy/"
+        );
+        assert_eq!(
+            printable_shell_command.printable_invocation_string_with_options(
+                FormattingOptions {
+                    argument_line_wrapping: Some(crate::ArgumentLineWrapping::ByArgument),
+                    ..Default::default()
+                }
+            )?,
+            "rsync \\
+  -avz \\
+  --exclude \\
+  .DS_Store \\
+  --exclude \\
+  .git \\
+  ./dist/web/experiments.cubing.net/test/deploy/ \\
+  experiments.cubing.net:~/experiments.cubing.net/test/deploy/"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn command_with_space_is_escaped_by_default() -> Result<(), Utf8Error> {
+        let printable_shell_command =
+            PrintableShellCommand::new("/Applications/My App.app/Contents/Resources/my-app");
+        assert_eq!(
+            printable_shell_command.printable_invocation_string_with_options(
+                FormattingOptions {
+                    argument_line_wrapping: Some(crate::ArgumentLineWrapping::ByArgument),
+                    ..Default::default()
+                }
+            )?,
+            "'/Applications/My App.app/Contents/Resources/my-app'"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn command_with_equal_sign_is_escaped_by_default() -> Result<(), Utf8Error> {
+        let printable_shell_command = PrintableShellCommand::new("THIS_LOOKS_LIKE_AN=env-var");
+        assert_eq!(
+            printable_shell_command.printable_invocation_string_with_options(
+                FormattingOptions {
+                    argument_line_wrapping: Some(crate::ArgumentLineWrapping::ByArgument),
+                    ..Default::default()
+                }
+            )?,
+            "'THIS_LOOKS_LIKE_AN=env-var'"
+        );
+        Ok(())
+    }
 }
