@@ -32,10 +32,16 @@ impl PrintableShellCommand {
     }
 
     /// Add args using `.arg(…)` each, in bulk.
-    pub fn arg_each<S: AsRef<OsStr>>(&mut self, arg: S) -> &mut Self {
+    pub fn arg_each<I, S>(&mut self, args: I) -> &mut Self
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<OsStr>,
+    {
         self.adopt_args();
-        let arg = self.arg_without_adoption(arg);
-        self.command.arg(arg);
+        for arg in args {
+            let arg = self.arg_without_adoption(arg);
+            self.command.arg(arg);
+        }
         self
     }
 
@@ -494,6 +500,19 @@ mod tests {
                 }
             )?,
             "'THIS_LOOKS_LIKE_AN=env-var'"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn arg_each() -> Result<(), Utf8Error> {
+        let mut printable_shell_command = PrintableShellCommand::new("echo");
+        printable_shell_command.arg_each(["hello", "world"]);
+        assert_eq!(
+            printable_shell_command.printable_invocation_string()?,
+            "echo \\
+  hello \\
+  world"
         );
         Ok(())
     }
