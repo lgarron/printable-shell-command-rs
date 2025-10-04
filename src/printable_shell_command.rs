@@ -31,6 +31,14 @@ impl PrintableShellCommand {
         }
     }
 
+    /// Add args using `.arg(…)` each, in bulk.
+    pub fn arg_each<S: AsRef<OsStr>>(&mut self, arg: S) -> &mut Self {
+        self.adopt_args();
+        let arg = self.arg_without_adoption(arg);
+        self.command.arg(arg);
+        self
+    }
+
     pub fn arg<S: AsRef<OsStr>>(&mut self, arg: S) -> &mut Self {
         self.adopt_args();
         let arg = self.arg_without_adoption(arg);
