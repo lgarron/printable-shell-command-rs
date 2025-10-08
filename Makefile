@@ -22,3 +22,11 @@ lint:
 format:
 	cargo clippy --fix --allow-no-vcs
 	cargo fmt
+
+.PHONY: clean
+clean:
+	# No-op in this repo
+
+.PHONY: reset
+reset: clean
+	rm -rf ./target
