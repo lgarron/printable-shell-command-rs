@@ -1,6 +1,6 @@
 [package]
 name = "printable-shell-command"
-version = "0.2.4"
+version = "0.2.5-dev"
 edition = "2021"
 description = "A helper library to print shell commands."
 license = "MIT"
