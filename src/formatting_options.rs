@@ -37,5 +37,6 @@ pub struct FormattingOptions {
     pub quoting: Option<Quoting>,
     // Line wrapping to use between arguments.
     pub argument_line_wrapping: Option<ArgumentLineWrapping>,
+    pub skip_line_wrap_before_first_arg: Option<bool>,
     // TODO: text styling
 }

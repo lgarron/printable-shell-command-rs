@@ -19,6 +19,7 @@ struct CachedFormattingInfo {
     // arg_indentation: String,
     // line_wrap_separator: String,
     arg_tuple_separator: String,
+    post_command_separator: String,
     entry_separator: String,
 }
 
@@ -58,6 +59,14 @@ impl CachedFormattingInfo {
             }
             ArgumentLineWrapping::Inline => INLINE_SEPARATOR.to_owned(),
         };
+        let post_command_separator = if formatting_options
+            .skip_line_wrap_before_first_arg
+            .unwrap_or(false)
+        {
+            INLINE_SEPARATOR.to_owned()
+        } else {
+            entry_separator.clone()
+        };
         Self {
             formatting_options,
             main_indentation,
@@ -65,6 +74,7 @@ impl CachedFormattingInfo {
             // line_wrap_separator,
             arg_tuple_separator,
             entry_separator,
+            post_command_separator,
         }
     }
 
@@ -83,30 +93,24 @@ impl CachedFormattingInfo {
 }
 
 pub(crate) struct PrintBuilder {
+    program_entry: String,
     serialized_entries: Vec<String>,
     cached_formatting_info: CachedFormattingInfo,
 }
 
 impl PrintBuilder {
-    pub fn new(formatting_options: FormattingOptions) -> Self {
+    pub fn new(program_name: &str, formatting_options: FormattingOptions) -> Self {
         let cached_formatting_info = CachedFormattingInfo::new(formatting_options);
+        let program_entry = format!(
+            "{}{}",
+            cached_formatting_info.main_indentation,
+            cached_formatting_info.format_program_name(program_name),
+        );
         Self {
+            program_entry,
             serialized_entries: vec![],
             cached_formatting_info,
         }
-    }
-
-    /// It is on the caller to call this:
-    ///
-    /// - exactly once,
-    /// - before any args.
-    pub fn add_program_name(&mut self, program_name: &str) {
-        self.serialized_entries.push(format!(
-            "{}{}",
-            self.cached_formatting_info.main_indentation,
-            self.cached_formatting_info
-                .format_program_name(program_name),
-        ))
     }
 
     pub fn add_single_arg(&mut self, arg: &str) {
@@ -125,7 +129,14 @@ impl PrintBuilder {
     }
 
     pub fn get(&self) -> String {
-        self.serialized_entries
-            .join(&self.cached_formatting_info.entry_separator)
+        let mut output = self.program_entry.clone();
+        if !self.serialized_entries.is_empty() {
+            output = output
+                + &self.cached_formatting_info.post_command_separator
+                + &self
+                    .serialized_entries
+                    .join(&self.cached_formatting_info.entry_separator);
+        };
+        output
     }
 }

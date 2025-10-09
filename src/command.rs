@@ -22,8 +22,8 @@ impl ShellPrintableWithOptions for Command {
         &self,
         formatting_options: FormattingOptions,
     ) -> String {
-        let mut print_builder = PrintBuilder::new(formatting_options);
-        print_builder.add_program_name(&self.get_program().to_string_lossy());
+        let mut print_builder =
+            PrintBuilder::new(&self.get_program().to_string_lossy(), formatting_options);
         for arg in self.get_args() {
             add_arg_from_command_lossy(&mut print_builder, arg);
         }
@@ -34,8 +34,10 @@ impl ShellPrintableWithOptions for Command {
         &self,
         formatting_options: FormattingOptions,
     ) -> Result<String, Utf8Error> {
-        let mut print_builder = PrintBuilder::new(formatting_options);
-        print_builder.add_program_name(TryInto::<&str>::try_into(self.get_program())?);
+        let mut print_builder = PrintBuilder::new(
+            TryInto::<&str>::try_into(self.get_program())?,
+            formatting_options,
+        );
         for arg in self.get_args() {
             add_arg_from_command(&mut print_builder, arg)?;
         }

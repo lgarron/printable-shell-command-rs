@@ -163,8 +163,8 @@ impl ShellPrintableWithOptions for PrintableShellCommand {
         &self,
         formatting_options: FormattingOptions,
     ) -> String {
-        let mut print_builder = PrintBuilder::new(formatting_options);
-        print_builder.add_program_name(&self.get_program().to_string_lossy());
+        let mut print_builder =
+            PrintBuilder::new(&self.get_program().to_string_lossy(), formatting_options);
         for arg_group in &self.arg_groups {
             let mut strings: Vec<String> = vec![];
             for arg in arg_group {
@@ -180,8 +180,10 @@ impl ShellPrintableWithOptions for PrintableShellCommand {
         &self,
         formatting_options: FormattingOptions,
     ) -> Result<String, Utf8Error> {
-        let mut print_builder = PrintBuilder::new(formatting_options);
-        print_builder.add_program_name(TryInto::<&str>::try_into(self.get_program())?);
+        let mut print_builder = PrintBuilder::new(
+            TryInto::<&str>::try_into(self.get_program())?,
+            formatting_options,
+        );
         for arg_group in &self.arg_groups {
             let mut strings: Vec<&str> = vec![];
             for arg in arg_group {
@@ -513,6 +515,41 @@ mod tests {
             "echo \\
   hello \\
   world"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn dont_line_wrap_after_command() -> Result<(), Utf8Error> {
+        let mut printable_shell_command = PrintableShellCommand::new("echo");
+        printable_shell_command.args(["the", "rain", "in", "spain"]);
+        printable_shell_command.arg("stays");
+        printable_shell_command.args(["mainly", "in", "the", "plain"]);
+        assert_eq!(
+            printable_shell_command.printable_invocation_string_with_options(
+                FormattingOptions {
+                    skip_line_wrap_before_first_arg: Some(true),
+                    ..Default::default()
+                }
+            )?,
+            "echo the rain in spain \\
+  stays \\
+  mainly in the plain"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn dont_line_wrap_after_command_when_there_are_no_args() -> Result<(), Utf8Error> {
+        let printable_shell_command = PrintableShellCommand::new("echo");
+        assert_eq!(
+            printable_shell_command.printable_invocation_string_with_options(
+                FormattingOptions {
+                    skip_line_wrap_before_first_arg: Some(true),
+                    ..Default::default()
+                }
+            )?,
+            "echo"
         );
         Ok(())
     }
