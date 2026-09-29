@@ -212,7 +212,7 @@ mod tests {
     use std::{ops::DerefMut, process::Command, str::Utf8Error};
 
     use crate::{
-        FormattingOptions, PrintableShellCommand, Quoting, ShellPrintable,
+        ArgumentLineWrapping, FormattingOptions, PrintableShellCommand, Quoting, ShellPrintable,
         ShellPrintableWithOptions,
     };
 
@@ -343,6 +343,22 @@ mod tests {
             .arg("./dist/web/experiments.cubing.net/test/deploy/")
             .arg("experiments.cubing.net:~/experiments.cubing.net/test/deploy/");
         printable_shell_command
+    }
+
+    #[test]
+    fn single_quotes_and_empty_arg() -> Result<(), Utf8Error> {
+        let mut printable_shell_command = PrintableShellCommand::new("echo");
+        printable_shell_command.args(vec!["I'dn't've", "", "quo'''ted"]);
+        assert_eq!(
+            printable_shell_command.printable_invocation_string_lossy_with_options(
+                FormattingOptions {
+                    argument_line_wrapping: Some(ArgumentLineWrapping::Inline),
+                    ..Default::default()
+                }
+            ),
+            "echo 'I'\\''dn'\\''t'\\''ve' '' 'quo'\\'\\'\\''ted'"
+        );
+        Ok(())
     }
 
     #[test]

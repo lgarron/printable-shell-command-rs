@@ -12,6 +12,10 @@ static ARG_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r#"[ "'`|$*?><()\[\]{}&\\;#]"#).unwrap());
 
 pub(crate) fn conditional_escape(s: &str, options: ConditionalEscapeOptions) -> String {
+    if s.is_empty() {
+        return "''".to_owned();
+    }
+
     let regex = if options.is_main_command {
         &PROGRAM_NAME_REGEX
     } else {
@@ -26,5 +30,10 @@ pub(crate) fn conditional_escape(s: &str, options: ConditionalEscapeOptions) -> 
 }
 
 pub(crate) fn unconditional_escape(s: &str) -> String {
-    format!("'{}'", s.replace("\\", "\\\\").replace("'", "\\'"))
+    format!(
+        "'{}'",
+        s.replace("\\", "\\\\")
+            .replace("'", "'\\''")
+            .replace("'''", "'")
+    )
 }
